@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#244c3c" />
+    <meta
+      name="description"
+      content="Un carnet personnel pour suivre ton humeur et tes ressentis, à ton rythme."
+    />
+    <title>Ancrage · Mon carnet</title>
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css?v=2.0" />
+    <link rel="stylesheet" href="account.css?v=2.0" />
+    <script src="pdf-lib.min.js" defer></script>
+    <script type="module" src="main.js?v=2.0"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Aller au contenu</a>
+    <div id="sync-banner" class="sync-banner" hidden>
+      <p id="sync-status" role="status" aria-live="polite"></p>
+      <button type="button" id="sync-retry" hidden>Réessayer l’envoi</button>
+      <button type="button" id="sync-export" hidden>
+        Exporter ma copie en attente
+      </button>
+      <button type="button" id="sync-reload" hidden>
+        Recharger après export
+      </button>
+    </div>
+    <div id="app">
+      <main id="main-content" class="auth-shell">
+        <h1>Ancrage</h1>
+        <p role="status">Ouverture du carnet…</p>
+      </main>
+    </div>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <dialog id="dialog"></dialog>
+    <noscript
+      ><p>Active JavaScript pour utiliser ton carnet Ancrage.</p></noscript
+    >
+  </body>
+</html>

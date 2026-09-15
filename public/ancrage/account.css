@@ -1,0 +1,171 @@
+/* Styles des comptes et de la synchronisation ; le thème du carnet reste dans style.css. */
+[hidden] {
+  display: none !important;
+}
+.skip-link {
+  position: absolute;
+  z-index: 100;
+  top: -6rem;
+  left: 1rem;
+  padding: 0.8rem 1rem;
+  background: #244c3c;
+  color: white;
+  border-radius: 0.6rem;
+}
+.skip-link:focus {
+  top: 1rem;
+}
+:focus-visible {
+  outline: 3px solid #426b4a;
+  outline-offset: 4px;
+}
+h1[tabindex="-1"]:focus {
+  outline: none;
+}
+.auth-shell {
+  width: min(100% - 2rem, 38rem);
+  margin: 3rem auto;
+  padding: clamp(1rem, 4vw, 2.5rem);
+  background: #fffef8;
+  border: 1px solid #dce2d3;
+  border-radius: 1.5rem;
+}
+.auth-shell h1 {
+  font-size: clamp(1.9rem, 6vw, 2.6rem);
+  margin: 1.5rem 0 0.8rem;
+}
+.auth-shell h2 {
+  font-size: 1.2rem;
+}
+.auth-shell p,
+.account-form label,
+.privacy-notice p {
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.auth-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1.5rem 0;
+}
+.auth-nav [aria-current="page"] {
+  background: #e8eedd;
+  font-weight: 700;
+  border-radius: 0.6rem;
+}
+.account-form {
+  display: grid;
+  gap: 1rem;
+}
+.account-form label {
+  display: grid;
+  gap: 0.4rem;
+}
+.account-form .check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+.account-form .check input {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  margin-top: 0.3rem;
+}
+.account-form input:not([type="checkbox"]),
+.recovery-code {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #bfcbb3;
+  border-radius: 0.7rem;
+  padding: 0.8rem;
+  font: inherit;
+  background: #fff;
+}
+.account-form [role="alert"] {
+  color: #8a302e;
+  margin: 0;
+}
+.account-form [role="alert"]:empty {
+  display: none;
+}
+.local-option {
+  border-top: 1px solid #dce2d3;
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+}
+.privacy-notice {
+  max-height: 28rem;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+.privacy-notice a {
+  overflow-wrap: anywhere;
+}
+.recovery-code {
+  font-family: monospace;
+  font-size: 0.95rem;
+}
+.sync-banner {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.55rem 1rem;
+  background: #eaf0e0;
+  border-bottom: 1px solid #cedabd;
+  color: #244c3c;
+}
+.sync-banner p {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  margin: 0;
+  flex: 1 1 18rem;
+}
+.sync-banner button {
+  border: 1px solid currentColor;
+  padding: 0.4rem 0.7rem;
+  font: inherit;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+}
+.sync-banner[data-status="error"] {
+  background: #f8e5dc;
+  color: #772b23;
+}
+body:has(.sync-banner:not([hidden])) .sidebar {
+  padding-top: 4rem;
+}
+form.journal {
+  margin: 0;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+@media (max-width: 600px) {
+  .auth-shell {
+    margin: 1rem auto;
+  }
+  .sync-banner {
+    position: static;
+  }
+  .button-row {
+    flex-wrap: wrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

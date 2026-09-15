@@ -1,0 +1,36 @@
+# Configuration réelle et secrets : conserver uniquement les modèles.
+config.php
+config.local.php
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+
+# Bases, sauvegardes et exports des carnets.
+*.sqlite*
+*.db
+*.db-*
+*.sql
+!database/schema.sql
+!database/schema.test.sql
+backups/
+exports/
+ancrage_*.json
+ancrage-*.json
+*.zip
+*.gz
+*.bak
+*.bundle
+
+# Fichiers temporaires et dépendances locales.
+*.log
+tests/runtime/
+node_modules/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
