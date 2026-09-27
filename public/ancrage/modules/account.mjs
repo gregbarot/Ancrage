@@ -1,14 +1,15 @@
 import { context } from "./context.mjs";
 import { request } from "./api.mjs";
-import { escapeHtml as esc, downloadFile, showRecoveryCode } from "./dom.mjs";
+import { escapeHtml as esc, downloadFile } from "./dom.mjs";
 import { privacyNotice } from "./privacy.mjs";
 
 export function accountPanel() {
   if (context.repository.mode === "local")
     return `<section class="card"><h2>Retrouver mon carnet sur mes appareils</h2>
-    <p>Tu utilises le carnet sur cet appareil. Avec un compte sur invitation, tu peux choisir de le transférer vers ton espace personnel.</p>
+    <p>Tu utilises le carnet sur cet appareil. Avec un compte, tu peux choisir de le transférer vers ton espace personnel.</p>
     <button type="button" class="primary" data-account-login>Se connecter ou créer un compte</button></section>`;
-  return `<section class="card"><h2>Mon compte</h2><p>Identifiant : <strong>${esc(context.session.user.username)}</strong></p>
+
+  return `<section class="card"><h2>Mon compte</h2><p>Adresse e-mail : <strong>${esc(context.session.user.email)}</strong></p>
     <div class="button-row"><button type="button" class="subtle" data-account-refresh>Actualiser depuis mon compte</button>
     <button type="button" class="subtle" data-account-password>Changer mon mot de passe</button>
     <button type="button" class="subtle" data-account-export>Exporter mes données de compte</button>
@@ -24,6 +25,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
     document.querySelectorAll(selector).forEach((button) => {
       button.onclick = handler;
     });
+
   const mayLeave = () => {
     if (context.repository.hasPending || context.hasDraft()) {
       toast(
@@ -33,15 +35,19 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
     }
     return true;
   };
+
   bind("[data-account-login]", () => {
     if (!mayLeave()) return;
     sessionStorage.removeItem("ancrage-mode");
     location.reload();
   });
+
   bind("[data-account-refresh]", () => {
     if (mayLeave()) location.reload();
   });
+
   bind("[data-account-import]", importLocal);
+
   bind("[data-account-logout]", async () => {
     if (!mayLeave()) return;
     try {
@@ -52,6 +58,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
       toast(error.message);
     }
   });
+
   bind("[data-account-export]", async () => {
     try {
       const data = await request("export");
@@ -63,6 +70,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
       toast(error.message);
     }
   });
+
   bind("[data-account-password]", () => {
     if (!mayLeave()) return;
     openDialog(`<h2>Changer mon mot de passe</h2><form id="password-form" class="account-form">
@@ -72,6 +80,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
       <p>Utilise une phrase d’au moins 15 caractères. Les autres sessions seront déconnectées.</p>
       <p id="account-error" role="alert"></p><div class="button-row"><button type="button" class="subtle" data-close>Annuler</button>
       <button class="primary" type="submit">Changer le mot de passe</button></div></form>`);
+
     const form = document.querySelector("#password-form");
     form.onsubmit = async (event) => {
       event.preventDefault();
@@ -81,6 +90,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
         errorBox.textContent = "Les deux mots de passe ne correspondent pas.";
         return;
       }
+
       const button = form.querySelector("[type=submit]");
       button.disabled = true;
       try {
@@ -90,7 +100,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
         });
         context.session = result;
         document.querySelector("#dialog").close();
-        showRecoveryCode(result.recoveryCode);
+        toast("Mot de passe modifié.");
       } catch (error) {
         errorBox.textContent = error.message;
       } finally {
@@ -98,6 +108,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
       }
     };
   });
+
   bind("[data-account-delete]", () => {
     if (!mayLeave()) return;
     openDialog(`<h2>Supprimer mon compte</h2><p>Ton profil et ton carnet seront supprimés de la base active. Exporte d’abord les données que tu veux conserver.</p>
@@ -106,6 +117,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
       <label class="check"><input type="checkbox" name="confirm" required> Je confirme la suppression de mon compte et de son carnet.</label>
       <p id="account-error" role="alert"></p><div class="button-row"><button type="button" class="subtle" data-close>Annuler</button>
       <button type="submit" class="primary danger">Supprimer définitivement</button></div></form>`);
+
     const form = document.querySelector("#delete-account-form");
     form.onsubmit = async (event) => {
       event.preventDefault();

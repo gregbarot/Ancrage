@@ -34,9 +34,9 @@ final class Store
         return $this->query('SELECT * FROM users WHERE id = ?', [$id])->fetch() ?: null;
     }
 
-    public function byUsername(string $name): ?array
+    public function byEmail(string $email): ?array
     {
-        return $this->query('SELECT * FROM users WHERE username = ?', [$name])->fetch() ?: null;
+        return $this->query('SELECT * FROM users WHERE email = ?', [$email])->fetch() ?: null;
     }
 
     public function limit(string $opaqueKey, int $maximum, int $seconds): void
@@ -46,7 +46,6 @@ final class Store
         try {
             $this->query('INSERT INTO rate_limits (key_hash, attempts, expires_at) VALUES (?, 0, ?)', [$opaqueKey, $now + $seconds]);
         } catch (PDOException $error) {
-            // Une autre requête peut avoir déjà créé le compteur.
             if (!in_array((string) $error->getCode(), ['23000', '23505'], true)) { throw $error; }
         }
         $this->query('UPDATE rate_limits SET attempts = attempts + 1 WHERE key_hash = ?', [$opaqueKey]);

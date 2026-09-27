@@ -22,7 +22,7 @@ final class Security
             'httponly' => true,
             'samesite' => 'Strict',
         ]);
-        session_cache_limiter(''); // Les en-têtes no-store sont définis par le point d’entrée.
+        session_cache_limiter('');
         if (!session_start()) { throw new \RuntimeException('Stockage des sessions indisponible.'); }
         $now = time();
         if (isset($_SESSION['user_id']) && (
@@ -52,8 +52,11 @@ final class Security
         $_SESSION = [];
         if (!session_regenerate_id(true)) { throw new \RuntimeException('Session indisponible.'); }
         $_SESSION = [
-            'user_id' => $user['id'], 'auth_version' => (int) $user['auth_version'],
-            'authenticated_at' => time(), 'last_activity' => time(), 'csrf' => bin2hex(random_bytes(32)),
+            'user_id' => $user['id'],
+            'auth_version' => (int) $user['auth_version'],
+            'authenticated_at' => time(),
+            'last_activity' => time(),
+            'csrf' => bin2hex(random_bytes(32)),
         ];
     }
 
@@ -64,12 +67,14 @@ final class Security
         $_SESSION['csrf'] = bin2hex(random_bytes(32));
     }
 
-    public static function username(mixed $value): string
+    public static function email(mixed $value): string
     {
-        if (!is_string($value)) { throw new HttpError(422, 'Vérifie ton identifiant.'); }
+        if (!is_string($value)) {
+            throw new HttpError(422, 'Vérifie ton adresse e-mail.');
+        }
         $value = strtolower(trim($value));
-        if (!preg_match('/^[a-z0-9][a-z0-9_.-]{2,39}$/D', $value)) {
-            throw new HttpError(422, 'Identifiant : 3 à 40 lettres sans accent, chiffres, points ou tirets.');
+        if ($value === '' || strlen($value) > 254 || filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
+            throw new HttpError(422, 'Indique une adresse e-mail valide.');
         }
         return $value;
     }
@@ -85,18 +90,20 @@ final class Security
     public static function hashPassword(string $password): string
     {
         if (defined('PASSWORD_ARGON2ID')) {
-            return password_hash($password, PASSWORD_ARGON2ID, ['memory_cost' => 65536, 'time_cost' => 3, 'threads' => 1]);
+            return password_hash($password, PASSWORD_ARGON2ID, [
+                'memory_cost' => 65536,
+                'time_cost' => 3,
+                'threads' => 1,
+            ]);
         }
         return password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
     }
 
     public static function verify(mixed $password, string $hash): bool
     {
-        return is_string($password) && strlen($password) <= 72 && !str_contains($password, "\0") && password_verify($password, $hash);
-    }
-
-    public static function recoveryCode(): string
-    {
-        return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+        return is_string($password)
+            && strlen($password) <= 72
+            && !str_contains($password, "\0")
+            && password_verify($password, $hash);
     }
 }
