@@ -10,7 +10,7 @@ export const MOODS = [
   { score: 2, label: "Mauvais", emoji: "😟", color: "#e7ac89" },
   { score: 1, label: "Horrible", emoji: "😣", color: "#d89998" },
 ];
-export function createInitialNotebook(displayName = "Mon carnet") {
+export function createInitialNotebook(displayName = "") {
   return migrateData({
     version: 1,
     profile: {

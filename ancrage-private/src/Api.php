@@ -80,7 +80,7 @@ final class Api
         $hash = Security::hashPassword($password);
         $initial = array_key_exists('notebook', $body)
             ? Notebook::validate($body['notebook'])
-            : Notebook::initial('toi');
+            : Notebook::initial('');
         $payload = $this->cipher->encrypt($initial, $id);
         $db = $this->store->db;
         $db->beginTransaction();

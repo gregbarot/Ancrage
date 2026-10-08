@@ -85,7 +85,7 @@ final class Notebook
             self::fail();
         }
         self::keys($profile, ['displayName', 'symbol', 'welcomeText', 'photo']);
-        self::text($profile['displayName'] ?? null, 50, true);
+        self::text($profile['displayName'] ?? null, 50, false);
         self::text($profile['symbol'] ?? null, 16, true);
         self::text($profile['welcomeText'] ?? null, 200, true);
         if (isset($profile['photo'])) {
