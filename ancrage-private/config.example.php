@@ -17,6 +17,7 @@ return [
     'backup_retention_days' => null, // Renseigner après confirmation de l’hébergeur.
     'session_idle_seconds' => 1800,
     'session_max_seconds' => 43200,
+    'remember_session_seconds' => 2592000, // 30 jours si « Se souvenir de moi » est coché.
     'allow_local_http' => false, // Tests sur loopback uniquement.
     'timezone' => 'Europe/Paris',
 ];

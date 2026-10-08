@@ -6,6 +6,7 @@ import { privacyNotice } from "./modules/privacy.mjs";
 import { createInitialNotebook, migrateData, validateBackup } from "./core.mjs";
 
 const app = document.querySelector("#app");
+const AUTH_SCREEN_KEY = "ancrage-auth-screen";
 let serviceError = "";
 
 async function start(mode, result = null) {
@@ -50,9 +51,26 @@ function setupStatus() {
   const retry = document.querySelector("#sync-retry");
   const exporting = document.querySelector("#sync-export");
   const reload = document.querySelector("#sync-reload");
+
+  let account = document.querySelector("#sync-account");
+  if (!account) {
+    account = document.createElement("button");
+    account.type = "button";
+    account.id = "sync-account";
+    account.textContent = "Sauvegarder en ligne";
+    banner.append(account);
+  }
+
+  account.onclick = () => {
+    sessionStorage.setItem(AUTH_SCREEN_KEY, "1");
+    sessionStorage.removeItem("ancrage-mode");
+    location.reload();
+  };
+
   const render = ({ status, error, pending }) => {
     const messages = {
-      local: "Carnet conservé sur cet appareil",
+      local:
+        "Suivi enregistré dans ce navigateur. Crée un compte pour le sauvegarder en ligne et le retrouver sur tes autres appareils.",
       saved: "Carnet synchronisé",
       pending: "Modifications en attente d’envoi…",
       sending: "Enregistrement dans ton compte…",
@@ -62,9 +80,12 @@ function setupStatus() {
     retry.hidden = status !== "error" || context.repository.blocked;
     exporting.hidden = !pending;
     reload.hidden = !context.repository.blocked;
+    account.hidden = context.repository.mode !== "local";
   };
+
   context.repository.onStatus = render;
   render({ status: context.repository.status, pending: false });
+
   retry.onclick = () => {
     void context.repository.retry();
   };
@@ -76,10 +97,12 @@ function setupStatus() {
   reload.onclick = () => {
     location.reload();
   };
+
   window.addEventListener("online", () => {
     if (context.repository.hasPending && !context.repository.blocked)
       void context.repository.retry();
   });
+
   window.addEventListener("beforeunload", (event) => {
     if (context.repository.hasPending) {
       event.preventDefault();
@@ -104,7 +127,7 @@ function authScreen(mode = "login") {
           `<button type="button" class="plain" data-auth-mode="${key}" ${mode === key ? 'aria-current="page"' : ""}>${label}</button>`,
       )
       .join("")}</nav>
-    ${serviceError ? `<p class="notice" role="alert">${esc(serviceError)} Tu peux ouvrir ton carnet sur cet appareil.</p>` : ""}
+    ${serviceError ? `<p class="notice" role="alert">${esc(serviceError)} Tu peux continuer à utiliser ton carnet dans ce navigateur.</p>` : ""}
     <form id="auth-form" class="account-form">
       <label for="auth-email">Adresse e-mail
         <input id="auth-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" required>
@@ -113,15 +136,18 @@ function authScreen(mode = "login") {
         <input id="auth-password" name="password" type="password" autocomplete="${registration ? "new-password" : "current-password"}" ${registration ? 'minlength="15" maxlength="72"' : 'maxlength="72"'} required>
       </label>
       ${registration ? '<p class="muted" id="password-help">Utilise une phrase de passe d’au moins 15 caractères.</p><label for="auth-confirmation">Confirmer le mot de passe<input id="auth-confirmation" type="password" name="confirmation" autocomplete="new-password" required></label>' : ""}
-      ${registration
-        ? `<details><summary>Lire les informations sur mes données</summary>${privacyNotice(context.policy)}</details>
+      ${
+        registration
+          ? `<details><summary>Lire les informations sur mes données</summary>${privacyNotice(context.policy)}</details>
       <label class="check"><input name="adult" type="checkbox" required> J’ai 18 ans ou plus.</label>
       <label class="check"><input name="consent" type="checkbox" required> J’accepte explicitement l’enregistrement de mon carnet et des informations pouvant concerner ma santé pour les retrouver sur mes appareils. Je peux retirer cet accord en supprimant mon compte.</label>`
-        : ""}
+          : ""
+      }
+      <label class="check"><input name="remember" type="checkbox"> Se souvenir de moi sur cet appareil pendant 30 jours.</label>
       <p id="auth-error" role="alert"></p>
       <button type="submit" class="primary" ${!ready ? "disabled" : ""}>${registration ? "Créer mon compte" : "Me connecter"}</button>
     </form>
-    <div class="local-option"><h2>Sur cet appareil</h2><p>Tu peux aussi conserver ton carnet dans ce navigateur, sans synchronisation.</p><button type="button" class="subtle" id="use-local">Ouvrir le carnet de cet appareil</button></div>
+    <div class="local-option"><h2>Continuer sans compte</h2><p>Ton suivi restera enregistré automatiquement dans ce navigateur. Crée un compte plus tard si tu veux le sauvegarder en ligne et le retrouver sur d’autres appareils.</p><button type="button" class="subtle" id="use-local">Continuer sans compte</button></div>
     <p class="muted">Ton adresse e-mail sert à identifier ton compte. Ton mot de passe n’est jamais enregistré en clair.</p></main>`;
 
   document.querySelectorAll("[data-auth-mode]").forEach((button) => {
@@ -129,6 +155,7 @@ function authScreen(mode = "login") {
   });
 
   document.querySelector("#use-local").onclick = () => {
+    sessionStorage.removeItem(AUTH_SCREEN_KEY);
     void start("local");
   };
 
@@ -152,13 +179,26 @@ function authScreen(mode = "login") {
         ...values,
         adult: values.adult === "on",
         consent: values.consent === "on",
+        remember: values.remember === "on",
         policyVersion: context.policy?.version,
       };
       delete body.confirmation;
 
+      if (registration) {
+        try {
+          const raw = localStorage.getItem(LOCAL_KEY);
+          if (raw) {
+            body.notebook = migrateData(validateBackup(JSON.parse(raw)));
+          }
+        } catch {
+          // Le compte peut quand même être créé si le stockage local est illisible.
+        }
+      }
+
       const result = await request(mode, { method: "POST", body });
       context.session = result;
       context.policy = result.policy;
+      sessionStorage.removeItem(AUTH_SCREEN_KEY);
       await start("cloud", result);
     } catch (error) {
       errorBox.textContent = error.message;
@@ -172,18 +212,22 @@ async function boot() {
     const session = await request("session");
     context.session = session;
     context.policy = session.policy;
-    if (sessionStorage.getItem("ancrage-mode") === "local") {
-      await start("local");
-      return;
-    }
+
     if (session.user) {
+      sessionStorage.removeItem(AUTH_SCREEN_KEY);
       await start("cloud", { ...session, ...(await request("notebook")) });
       return;
     }
   } catch (error) {
     serviceError = error.message;
   }
-  authScreen();
+
+  if (sessionStorage.getItem(AUTH_SCREEN_KEY) === "1") {
+    authScreen();
+    return;
+  }
+
+  await start("local");
 }
 
 void boot();

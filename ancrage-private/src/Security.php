@@ -4,16 +4,51 @@ namespace Ancrage;
 
 final class Security
 {
+    private static function isLocal(array $config): bool
+    {
+        return ($config['allow_local_http'] ?? false)
+            && in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
+            && in_array(parse_url($config['origin'], PHP_URL_HOST), ['127.0.0.1', 'localhost', '::1'], true);
+    }
+
+    private static function rememberSeconds(array $config): int
+    {
+        return max(3600, (int) ($config['remember_session_seconds'] ?? 2592000));
+    }
+
+    private static function writeSessionCookie(array $config, int $lifetime, bool $local): void
+    {
+        if (headers_sent()) {
+            return;
+        }
+
+        setcookie(session_name(), session_id(), [
+            'expires' => $lifetime > 0 ? time() + $lifetime : 0,
+            'path' => rtrim($config['base_path'], '/') . '/api/',
+            'secure' => !$local,
+            'httponly' => true,
+            'samesite' => 'Strict',
+        ]);
+    }
+
     public static function startSession(array $config): void
     {
         $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-        $local = ($config['allow_local_http'] ?? false)
-            && in_array($_SERVER['REMOTE_ADDR'] ?? '', ['127.0.0.1', '::1'], true)
-            && in_array(parse_url($config['origin'], PHP_URL_HOST), ['127.0.0.1', 'localhost', '::1'], true);
-        if (!$https && !$local) { throw new HttpError(426, 'Ouvre Ancrage avec une adresse HTTPS.'); }
+        $local = self::isLocal($config);
+
+        if (!$https && !$local) {
+            throw new HttpError(426, 'Ouvre Ancrage avec une adresse HTTPS.');
+        }
+
+        $rememberSeconds = self::rememberSeconds($config);
+
         ini_set('session.use_strict_mode', '1');
         ini_set('session.use_only_cookies', '1');
-        ini_set('session.gc_maxlifetime', (string) $config['session_max_seconds']);
+        ini_set(
+            'session.gc_maxlifetime',
+            (string) max((int) $config['session_max_seconds'], $rememberSeconds)
+        );
+
         session_name('ANCRAGESESSID');
         session_set_cookie_params([
             'lifetime' => 0,
@@ -23,14 +58,27 @@ final class Security
             'samesite' => 'Strict',
         ]);
         session_cache_limiter('');
-        if (!session_start()) { throw new \RuntimeException('Stockage des sessions indisponible.'); }
-        $now = time();
-        if (isset($_SESSION['user_id']) && (
-            $now - ($_SESSION['last_activity'] ?? 0) > $config['session_idle_seconds']
-            || $now - ($_SESSION['authenticated_at'] ?? 0) > $config['session_max_seconds']
-        )) {
-            self::clear();
+
+        if (!session_start()) {
+            throw new \RuntimeException('Stockage des sessions indisponible.');
         }
+
+        $now = time();
+        $remembered = ($_SESSION['remembered'] ?? false) === true;
+        $idleSeconds = $remembered
+            ? $rememberSeconds
+            : (int) $config['session_idle_seconds'];
+        $maxSeconds = $remembered
+            ? $rememberSeconds
+            : (int) $config['session_max_seconds'];
+
+        if (isset($_SESSION['user_id']) && (
+            $now - ($_SESSION['last_activity'] ?? 0) > $idleSeconds
+            || $now - ($_SESSION['authenticated_at'] ?? 0) > $maxSeconds
+        )) {
+            self::clear($config);
+        }
+
         $_SESSION['csrf'] ??= bin2hex(random_bytes(32));
         $_SESSION['last_activity'] = $now;
     }
@@ -39,6 +87,7 @@ final class Security
     {
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
         $csrf = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+
         if (!hash_equals(rtrim($config['origin'], '/'), $origin)
             || !is_string($_SESSION['csrf'] ?? null)
             || !hash_equals($_SESSION['csrf'], $csrf)
@@ -47,24 +96,42 @@ final class Security
         }
     }
 
-    public static function login(array $user): void
+    public static function login(array $user, bool $remember, array $config): void
     {
         $_SESSION = [];
-        if (!session_regenerate_id(true)) { throw new \RuntimeException('Session indisponible.'); }
+
+        if (!session_regenerate_id(true)) {
+            throw new \RuntimeException('Session indisponible.');
+        }
+
         $_SESSION = [
             'user_id' => $user['id'],
             'auth_version' => (int) $user['auth_version'],
             'authenticated_at' => time(),
             'last_activity' => time(),
+            'remembered' => $remember,
             'csrf' => bin2hex(random_bytes(32)),
         ];
+
+        self::writeSessionCookie(
+            $config,
+            $remember ? self::rememberSeconds($config) : 0,
+            self::isLocal($config)
+        );
     }
 
-    public static function clear(): void
+    public static function clear(array $config): void
     {
         $_SESSION = [];
-        if (!session_regenerate_id(true)) { throw new \RuntimeException('Session indisponible.'); }
+
+        if (!session_regenerate_id(true)) {
+            throw new \RuntimeException('Session indisponible.');
+        }
+
         $_SESSION['csrf'] = bin2hex(random_bytes(32));
+        $_SESSION['last_activity'] = time();
+
+        self::writeSessionCookie($config, 0, self::isLocal($config));
     }
 
     public static function email(mixed $value): string
@@ -72,10 +139,13 @@ final class Security
         if (!is_string($value)) {
             throw new HttpError(422, 'Vérifie ton adresse e-mail.');
         }
+
         $value = strtolower(trim($value));
+
         if ($value === '' || strlen($value) > 254 || filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
             throw new HttpError(422, 'Indique une adresse e-mail valide.');
         }
+
         return $value;
     }
 
@@ -84,6 +154,7 @@ final class Security
         if (!is_string($value) || mb_strlen($value) < 15 || strlen($value) > 72 || str_contains($value, "\0")) {
             throw new HttpError(422, 'Choisis une phrase de passe d’au moins 15 caractères (72 octets maximum).');
         }
+
         return $value;
     }
 
@@ -96,6 +167,7 @@ final class Security
                 'threads' => 1,
             ]);
         }
+
         return password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]);
     }
 

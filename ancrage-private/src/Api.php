@@ -41,6 +41,7 @@ final class Api
         return [
             'csrf' => $_SESSION['csrf'],
             'user' => $user ? $this->identity($user) : null,
+            'remembered' => $user ? (($_SESSION['remembered'] ?? false) === true) : false,
             'policy' => [
                 'version' => self::POLICY,
                 'owner' => $this->config['owner_name'],
@@ -66,6 +67,7 @@ final class Api
         $email = Security::email($body['email'] ?? null);
         $this->throttle('register', $email, 5);
         $password = Security::newPassword($body['password'] ?? null);
+        $remember = ($body['remember'] ?? false) === true;
 
         if (($body['consent'] ?? false) !== true || ($body['policyVersion'] ?? '') !== self::POLICY) {
             throw new HttpError(422, 'Ton accord explicite est nécessaire pour enregistrer le carnet en ligne.');
@@ -76,7 +78,9 @@ final class Api
 
         $id = bin2hex(random_bytes(16));
         $hash = Security::hashPassword($password);
-        $initial = Notebook::initial('toi');
+        $initial = array_key_exists('notebook', $body)
+            ? Notebook::validate($body['notebook'])
+            : Notebook::initial('toi');
         $payload = $this->cipher->encrypt($initial, $id);
         $db = $this->store->db;
         $db->beginTransaction();
@@ -99,13 +103,14 @@ final class Api
         }
 
         $user = $this->store->user($id);
-        Security::login($user);
+        Security::login($user, $remember, $this->config);
         return [...$this->session(), 'notebook' => $initial, 'revision' => 0];
     }
 
     private function login(array $body): array
     {
         $email = Security::email($body['email'] ?? null);
+        $remember = ($body['remember'] ?? false) === true;
         $this->throttle('login', $email);
         $user = $this->store->byEmail($email);
         $dummy = '$2y$12$SOpBVjyfpCNeOvNDIQIH2.On/eGWaYNOtH0JvpRlP92DOwm8NSQJO';
@@ -113,7 +118,7 @@ final class Api
         if (!$user || !$verified) {
             throw new HttpError(401, 'Adresse e-mail ou mot de passe incorrect.');
         }
-        Security::login($user);
+        Security::login($user, $remember, $this->config);
         $this->store->query('UPDATE users SET last_seen_at = ? WHERE id = ?', [time(), $user['id']]);
         return [...$this->session(), ...$this->notebook($user)];
     }
@@ -143,11 +148,12 @@ final class Api
             throw new HttpError(401, 'Mot de passe actuel incorrect.');
         }
         $new = Security::newPassword($body['newPassword'] ?? null);
+        $remember = ($_SESSION['remembered'] ?? false) === true;
         $this->store->query(
             'UPDATE users SET password_hash = ?, auth_version = auth_version + 1 WHERE id = ?',
             [Security::hashPassword($new), $user['id']]
         );
-        Security::login($this->store->user($user['id']));
+        Security::login($this->store->user($user['id']), $remember, $this->config);
         return $this->session();
     }
 
@@ -159,7 +165,7 @@ final class Api
             throw new HttpError(422, 'Confirme la suppression avec ton mot de passe.');
         }
         $this->store->query('DELETE FROM users WHERE id = ?', [$user['id']]);
-        Security::clear();
+        Security::clear($this->config);
         return ['deleted' => true, 'csrf' => $_SESSION['csrf']];
     }
 
@@ -181,7 +187,7 @@ final class Api
 
     private function logout(): array
     {
-        Security::clear();
+        Security::clear($this->config);
         return ['csrf' => $_SESSION['csrf']];
     }
 

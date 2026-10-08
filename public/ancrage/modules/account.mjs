@@ -5,9 +5,9 @@ import { privacyNotice } from "./privacy.mjs";
 
 export function accountPanel() {
   if (context.repository.mode === "local")
-    return `<section class="card"><h2>Retrouver mon carnet sur mes appareils</h2>
-    <p>Tu utilises le carnet sur cet appareil. Avec un compte, tu peux choisir de le transférer vers ton espace personnel.</p>
-    <button type="button" class="primary" data-account-login>Se connecter ou créer un compte</button></section>`;
+    return `<section class="card"><h2>Sauvegarder mon suivi en ligne</h2>
+    <p>Ton suivi est enregistré automatiquement dans ce navigateur. Crée un compte pour le sauvegarder en ligne et le retrouver sur tes autres appareils.</p>
+    <button type="button" class="primary" data-account-login>Créer un compte ou me connecter</button></section>`;
 
   return `<section class="card"><h2>Mon compte</h2><p>Adresse e-mail : <strong>${esc(context.session.user.email)}</strong></p>
     <div class="button-row"><button type="button" class="subtle" data-account-refresh>Actualiser depuis mon compte</button>
@@ -38,6 +38,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
 
   bind("[data-account-login]", () => {
     if (!mayLeave()) return;
+    sessionStorage.setItem("ancrage-auth-screen", "1");
     sessionStorage.removeItem("ancrage-mode");
     location.reload();
   });
@@ -52,6 +53,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
     if (!mayLeave()) return;
     try {
       await request("logout", { method: "POST", body: {} });
+      sessionStorage.removeItem("ancrage-auth-screen");
       sessionStorage.removeItem("ancrage-mode");
       location.reload();
     } catch (error) {
@@ -128,6 +130,7 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
           method: "DELETE",
           body: { password: new FormData(form).get("password"), confirm: true },
         });
+        sessionStorage.removeItem("ancrage-auth-screen");
         sessionStorage.removeItem("ancrage-mode");
         location.reload();
       } catch (error) {
