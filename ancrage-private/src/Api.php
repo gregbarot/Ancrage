@@ -123,6 +123,125 @@ final class Api
         return [...$this->session(), ...$this->notebook($user)];
     }
 
+    private function requestPasswordReset(array $body): array
+    {
+        $startedAt = microtime(true);
+        $email = Security::email($body['email'] ?? null);
+        $this->throttle('password-reset-request', $email, 5);
+
+        $now = time();
+        $ttl = max(300, (int) ($this->config['password_reset_seconds'] ?? 1800));
+        $expiresAt = $now + $ttl;
+
+        // Toujours générer un token, même si l'adresse n'existe pas,
+        // pour éviter un chemin de code trivialement différent.
+        $token = bin2hex(random_bytes(32));
+        $tokenHash = hash('sha256', $token);
+
+        $this->store->query('DELETE FROM password_resets WHERE expires_at <= ?', [$now]);
+        $user = $this->store->byEmail($email);
+
+        if ($user) {
+            $db = $this->store->db;
+            $db->beginTransaction();
+            try {
+                $this->store->query('DELETE FROM password_resets WHERE user_id = ?', [$user['id']]);
+                $this->store->query(
+                    'INSERT INTO password_resets (user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?)',
+                    [$user['id'], $tokenHash, $expiresAt, $now]
+                );
+                $db->commit();
+            } catch (\Throwable $error) {
+                if ($db->inTransaction()) { $db->rollBack(); }
+                throw $error;
+            }
+
+            $url = rtrim($this->config['origin'], '/')
+                . rtrim($this->config['base_path'], '/')
+                . '/?reset='
+                . rawurlencode($token);
+
+            try {
+                if (!Mailer::sendPasswordReset($this->config, $email, $url, $expiresAt)) {
+                    error_log('Ancrage: password reset email could not be sent');
+                }
+            } catch (\Throwable $error) {
+                // Ne pas révéler au client si l'adresse existe ou si l'envoi a échoué.
+                error_log('Ancrage: password reset email failed');
+            }
+        }
+
+        // Un minimum de temps commun réduit un peu les différences de réponse.
+        $elapsedMicros = (int) ((microtime(true) - $startedAt) * 1_000_000);
+        if ($elapsedMicros < 350_000) {
+            usleep(350_000 - $elapsedMicros);
+        }
+
+        return [
+            'message' => 'Si un compte correspond à cette adresse, un e-mail de réinitialisation a été envoyé.',
+            'csrf' => $_SESSION['csrf'],
+        ];
+    }
+
+    private function resetPassword(array $body): array
+    {
+        $token = $body['token'] ?? null;
+        if (!is_string($token) || !preg_match('/^[a-f0-9]{64}$/D', $token)) {
+            throw new HttpError(422, 'Ce lien de réinitialisation est invalide ou expiré.');
+        }
+
+        $newPassword = Security::newPassword($body['newPassword'] ?? null);
+        $tokenHash = hash('sha256', $token);
+        $this->throttle('password-reset', $tokenHash, 8);
+
+        $now = time();
+        $row = $this->store->query(
+            'SELECT user_id, expires_at FROM password_resets WHERE token_hash = ?',
+            [$tokenHash]
+        )->fetch();
+
+        if (!$row || (int) $row['expires_at'] < $now) {
+            if ($row) {
+                $this->store->query('DELETE FROM password_resets WHERE token_hash = ?', [$tokenHash]);
+            }
+            throw new HttpError(422, 'Ce lien de réinitialisation est invalide ou expiré.');
+        }
+
+        $db = $this->store->db;
+        $db->beginTransaction();
+        try {
+            // Suppression atomique : un même token ne peut être consommé qu'une fois.
+            $deleted = $this->store->query(
+                'DELETE FROM password_resets WHERE token_hash = ? AND expires_at >= ?',
+                [$tokenHash, $now]
+            );
+            if ($deleted->rowCount() !== 1) {
+                throw new HttpError(422, 'Ce lien de réinitialisation est invalide ou expiré.');
+            }
+
+            $this->store->query(
+                'UPDATE users SET password_hash = ?, auth_version = auth_version + 1 WHERE id = ?',
+                [Security::hashPassword($newPassword), $row['user_id']]
+            );
+            $this->store->query(
+                'DELETE FROM password_resets WHERE user_id = ?',
+                [$row['user_id']]
+            );
+            $db->commit();
+        } catch (\Throwable $error) {
+            if ($db->inTransaction()) { $db->rollBack(); }
+            throw $error;
+        }
+
+        // Le changement de auth_version invalide les anciennes sessions.
+        Security::clear($this->config);
+
+        return [
+            'reset' => true,
+            'csrf' => $_SESSION['csrf'],
+        ];
+    }
+
     private function save(array $body): array
     {
         $user = $this->user();
@@ -147,12 +266,24 @@ final class Api
         if (!Security::verify($body['currentPassword'] ?? null, $user['password_hash'])) {
             throw new HttpError(401, 'Mot de passe actuel incorrect.');
         }
+
         $new = Security::newPassword($body['newPassword'] ?? null);
         $remember = ($_SESSION['remembered'] ?? false) === true;
-        $this->store->query(
-            'UPDATE users SET password_hash = ?, auth_version = auth_version + 1 WHERE id = ?',
-            [Security::hashPassword($new), $user['id']]
-        );
+
+        $db = $this->store->db;
+        $db->beginTransaction();
+        try {
+            $this->store->query(
+                'UPDATE users SET password_hash = ?, auth_version = auth_version + 1 WHERE id = ?',
+                [Security::hashPassword($new), $user['id']]
+            );
+            $this->store->query('DELETE FROM password_resets WHERE user_id = ?', [$user['id']]);
+            $db->commit();
+        } catch (\Throwable $error) {
+            if ($db->inTransaction()) { $db->rollBack(); }
+            throw $error;
+        }
+
         Security::login($this->store->user($user['id']), $remember, $this->config);
         return $this->session();
     }
@@ -175,6 +306,8 @@ final class Api
             'GET session' => $this->session(),
             'POST register' => $this->register($body),
             'POST login' => $this->login($body),
+            'POST password-request' => $this->requestPasswordReset($body),
+            'POST password-reset' => $this->resetPassword($body),
             'GET notebook' => $this->notebook($this->user()),
             'PUT notebook' => $this->save($body),
             'POST password' => $this->password($body),

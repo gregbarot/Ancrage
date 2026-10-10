@@ -8,16 +8,26 @@ return [
     'db_password' => 'VOTRE_MOT_DE_PASSE_MYSQL',
     // Générer avec : php bin/console.php key
     'encryption_key' => 'COLLER_LA_CLE_BASE64_ICI',
+
     'origin' => 'https://lejokernoir.fr',
     'base_path' => '/ancrage',
+
     'owner_name' => 'RESPONSABLE_A_COMPLETER',
     'privacy_contact' => 'ADRESSE_EMAIL_A_COMPLETER',
+
+    // E-mail utilisé pour les liens « mot de passe oublié ».
+    // Idéalement, créer une vraie adresse du domaine, par ex. noreply@lejokernoir.fr.
+    'mail_from' => 'noreply@lejokernoir.fr',
+    'mail_from_name' => 'Ancrage',
+    'password_reset_seconds' => 1800, // 30 minutes
+
     // Durées proposées, à adapter et documenter avant utilisation réelle.
     'inactive_days' => 730,
     'backup_retention_days' => null, // Renseigner après confirmation de l’hébergeur.
     'session_idle_seconds' => 1800,
     'session_max_seconds' => 43200,
     'remember_session_seconds' => 2592000, // 30 jours si « Se souvenir de moi » est coché.
+
     'allow_local_http' => false, // Tests sur loopback uniquement.
     'timezone' => 'Europe/Paris',
 ];

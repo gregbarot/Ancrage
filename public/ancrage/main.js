@@ -8,6 +8,7 @@ import { createInitialNotebook, migrateData, validateBackup } from "./core.mjs";
 const app = document.querySelector("#app");
 const AUTH_SCREEN_KEY = "ancrage-auth-screen";
 let serviceError = "";
+let authNotice = "";
 
 async function start(mode, result = null) {
   let notebook = result?.notebook;
@@ -111,24 +112,50 @@ function setupStatus() {
   });
 }
 
-function authScreen(mode = "login") {
+function authScreen(mode = "login", resetToken = "") {
   const registration = mode === "register";
+  const forgotten = mode === "forgot";
+  const resetting = mode === "reset";
   const ready = !!context.policy;
 
-  app.innerHTML = `<main id="main-content" class="auth-shell"><header><div class="brand"><span class="brand-icon" aria-hidden="true">a</span>ancrage</div>
-    <h1>${registration ? "Créer mon compte" : "Ouvrir mon carnet"}</h1>
-    <p>Un carnet personnel, à retrouver sur tes appareils.</p></header>
-    <nav class="auth-nav" aria-label="Accès au compte">${[
-      ["login", "Connexion"],
-      ["register", "Créer un compte"],
-    ]
-      .map(
-        ([key, label]) =>
-          `<button type="button" class="plain" data-auth-mode="${key}" ${mode === key ? 'aria-current="page"' : ""}>${label}</button>`,
-      )
-      .join("")}</nav>
-    ${serviceError ? `<p class="notice" role="alert">${esc(serviceError)} Tu peux continuer à utiliser ton carnet dans ce navigateur.</p>` : ""}
-    <form id="auth-form" class="account-form">
+  const title = registration
+    ? "Créer mon compte"
+    : forgotten
+      ? "Mot de passe oublié"
+      : resetting
+        ? "Choisir un nouveau mot de passe"
+        : "Ouvrir mon carnet";
+
+  const intro = forgotten
+    ? "Indique l’adresse e-mail de ton compte. Si elle correspond à un compte Ancrage, tu recevras un lien de réinitialisation."
+    : resetting
+      ? "Choisis une nouvelle phrase de passe pour ton compte."
+      : "Un carnet personnel, à retrouver sur tes appareils.";
+
+  let formHtml = "";
+
+  if (forgotten) {
+    formHtml = `<form id="auth-form" class="account-form">
+      <label for="auth-email">Adresse e-mail
+        <input id="auth-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" required>
+      </label>
+      <p id="auth-error" role="alert"></p>
+      <button type="submit" class="primary" ${!ready ? "disabled" : ""}>Envoyer le lien</button>
+    </form>`;
+  } else if (resetting) {
+    formHtml = `<form id="auth-form" class="account-form">
+      <label for="auth-password">Nouveau mot de passe
+        <input id="auth-password" name="password" type="password" autocomplete="new-password" minlength="15" maxlength="72" required>
+      </label>
+      <p class="muted">Utilise une phrase de passe d’au moins 15 caractères.</p>
+      <label for="auth-confirmation">Confirmer le mot de passe
+        <input id="auth-confirmation" type="password" name="confirmation" autocomplete="new-password" required>
+      </label>
+      <p id="auth-error" role="alert"></p>
+      <button type="submit" class="primary" ${!ready ? "disabled" : ""}>Réinitialiser mon mot de passe</button>
+    </form>`;
+  } else {
+    formHtml = `<form id="auth-form" class="account-form">
       <label for="auth-email">Adresse e-mail
         <input id="auth-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" required>
       </label>
@@ -144,37 +171,98 @@ function authScreen(mode = "login") {
           : ""
       }
       <label class="check"><input name="remember" type="checkbox"> Se souvenir de moi sur cet appareil pendant 30 jours.</label>
+      ${!registration ? '<button type="button" class="plain" id="forgot-password">Mot de passe oublié ?</button>' : ""}
       <p id="auth-error" role="alert"></p>
       <button type="submit" class="primary" ${!ready ? "disabled" : ""}>${registration ? "Créer mon compte" : "Me connecter"}</button>
-    </form>
+    </form>`;
+  }
+
+  app.innerHTML = `<main id="main-content" class="auth-shell"><header><div class="brand"><span class="brand-icon" aria-hidden="true">a</span>ancrage</div>
+    <h1>${title}</h1>
+    <p>${intro}</p></header>
+    <nav class="auth-nav" aria-label="Accès au compte">${[
+      ["login", "Connexion"],
+      ["register", "Créer un compte"],
+    ]
+      .map(
+        ([key, label]) =>
+          `<button type="button" class="plain" data-auth-mode="${key}" ${mode === key ? 'aria-current="page"' : ""}>${label}</button>`,
+      )
+      .join("")}</nav>
+    ${authNotice ? `<p class="notice" role="status">${esc(authNotice)}</p>` : ""}
+    ${serviceError ? `<p class="notice" role="alert">${esc(serviceError)} Tu peux continuer à utiliser ton carnet dans ce navigateur.</p>` : ""}
+    ${formHtml}
     <div class="local-option"><h2>Continuer sans compte</h2><p>Ton suivi restera enregistré automatiquement dans ce navigateur. Crée un compte plus tard si tu veux le sauvegarder en ligne et le retrouver sur d’autres appareils.</p><button type="button" class="subtle" id="use-local">Continuer sans compte</button></div>
     <p class="muted">Ton adresse e-mail sert à identifier ton compte. Ton mot de passe n’est jamais enregistré en clair.</p></main>`;
 
   document.querySelectorAll("[data-auth-mode]").forEach((button) => {
-    button.onclick = () => authScreen(button.dataset.authMode);
+    button.onclick = () => {
+      authNotice = "";
+      history.replaceState({}, "", location.pathname);
+      authScreen(button.dataset.authMode);
+    };
   });
 
   document.querySelector("#use-local").onclick = () => {
+    authNotice = "";
+    history.replaceState({}, "", location.pathname);
     sessionStorage.removeItem(AUTH_SCREEN_KEY);
     void start("local");
   };
+
+  const forgotButton = document.querySelector("#forgot-password");
+  if (forgotButton) {
+    forgotButton.onclick = () => {
+      authNotice = "";
+      authScreen("forgot");
+    };
+  }
 
   const form = document.querySelector("#auth-form");
   form.onsubmit = async (event) => {
     event.preventDefault();
     const values = Object.fromEntries(new FormData(form));
     const errorBox = document.querySelector("#auth-error");
+    const button = form.querySelector("[type=submit]");
 
-    if (registration && values.confirmation !== values.password) {
+    if ((registration || resetting) && values.confirmation !== values.password) {
       errorBox.textContent = "Les deux mots de passe ne correspondent pas.";
       return;
     }
 
-    const button = form.querySelector("[type=submit]");
     button.disabled = true;
     errorBox.textContent = "";
 
     try {
+      if (forgotten) {
+        const result = await request("password-request", {
+          method: "POST",
+          body: { email: values.email },
+        });
+        authNotice =
+          result.message ||
+          "Si un compte correspond à cette adresse, un e-mail de réinitialisation a été envoyé.";
+        authScreen("login");
+        return;
+      }
+
+      if (resetting) {
+        const result = await request("password-reset", {
+          method: "POST",
+          body: {
+            token: resetToken,
+            newPassword: values.password,
+          },
+        });
+        if (result.reset) {
+          history.replaceState({}, "", location.pathname);
+          authNotice =
+            "Ton mot de passe a été modifié. Tu peux maintenant te connecter.";
+          authScreen("login");
+          return;
+        }
+      }
+
       const body = {
         ...values,
         adult: values.adult === "on",
@@ -198,6 +286,7 @@ function authScreen(mode = "login") {
       const result = await request(mode, { method: "POST", body });
       context.session = result;
       context.policy = result.policy;
+      authNotice = "";
       sessionStorage.removeItem(AUTH_SCREEN_KEY);
       await start("cloud", result);
     } catch (error) {
@@ -208,10 +297,19 @@ function authScreen(mode = "login") {
 }
 
 async function boot() {
+  const params = new URLSearchParams(location.search);
+  const resetToken = params.get("reset");
+
   try {
     const session = await request("session");
     context.session = session;
     context.policy = session.policy;
+
+    if (resetToken) {
+      sessionStorage.setItem(AUTH_SCREEN_KEY, "1");
+      authScreen("reset", resetToken);
+      return;
+    }
 
     if (session.user) {
       sessionStorage.removeItem(AUTH_SCREEN_KEY);
@@ -220,6 +318,12 @@ async function boot() {
     }
   } catch (error) {
     serviceError = error.message;
+  }
+
+  if (resetToken) {
+    sessionStorage.setItem(AUTH_SCREEN_KEY, "1");
+    authScreen("reset", resetToken);
+    return;
   }
 
   if (sessionStorage.getItem(AUTH_SCREEN_KEY) === "1") {

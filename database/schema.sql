@@ -19,6 +19,16 @@ CREATE TABLE IF NOT EXISTS notebooks (
     CONSTRAINT fk_notebook_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS password_resets (
+    user_id CHAR(32) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
+    token_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL UNIQUE,
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    INDEX password_reset_expiry (expires_at),
+    CONSTRAINT fk_password_reset_user
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS rate_limits (
     key_hash CHAR(64) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
     attempts INT NOT NULL,
