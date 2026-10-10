@@ -83,6 +83,42 @@ h1[tabindex="-1"]:focus {
   font: inherit;
   background: #fff;
 }
+.password-field {
+  position: relative;
+  display: block;
+}
+.account-form .password-field input {
+  padding-right: 3rem;
+}
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.55rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #49604c;
+  cursor: pointer;
+}
+.password-toggle:hover {
+  background: #edf2e7;
+}
+.password-toggle svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
 .account-form [role="alert"] {
   color: #8a302e;
   margin: 0;

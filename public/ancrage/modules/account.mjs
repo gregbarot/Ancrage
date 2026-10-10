@@ -3,6 +3,26 @@ import { request } from "./api.mjs";
 import { escapeHtml as esc, downloadFile } from "./dom.mjs";
 import { privacyNotice } from "./privacy.mjs";
 
+const PASSWORD_EYE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>';
+const PASSWORD_EYE_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 6.2A11 11 0 0 1 12 6c6.5 0 10 6 10 6a16 16 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.5 6 10 6a10.8 10.8 0 0 0 4.1-.8"/><path d="M9.9 9.9A3 3 0 0 0 14.1 14.1"/></svg>';
+
+function bindPasswordToggles(root = document) {
+  root.querySelectorAll("[data-password-toggle]").forEach((button) => {
+    button.onclick = () => {
+      const input = root.querySelector(`#${CSS.escape(button.dataset.passwordToggle)}`);
+      if (!input) return;
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      button.setAttribute("aria-pressed", String(!visible));
+      button.setAttribute(
+        "aria-label",
+        visible ? "Afficher le mot de passe" : "Masquer le mot de passe",
+      );
+      button.innerHTML = visible ? PASSWORD_EYE : PASSWORD_EYE_OFF;
+    };
+  });
+}
+
 export function accountPanel() {
   if (context.repository.mode === "local")
     return `<section class="card"><h2>Sauvegarder mon suivi en ligne</h2>
@@ -76,12 +96,15 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
   bind("[data-account-password]", () => {
     if (!mayLeave()) return;
     openDialog(`<h2>Changer mon mot de passe</h2><form id="password-form" class="account-form">
-      <label>Mot de passe actuel<input name="currentPassword" type="password" autocomplete="current-password" required></label>
-      <label>Nouveau mot de passe<input name="newPassword" type="password" autocomplete="new-password" minlength="15" maxlength="72" required></label>
-      <label>Confirmer le nouveau mot de passe<input name="confirmation" type="password" autocomplete="new-password" required></label>
-      <p>Utilise une phrase d’au moins 15 caractères. Les autres sessions seront déconnectées.</p>
+      <label for="current-password">Mot de passe actuel<span class="password-field"><input id="current-password" name="currentPassword" type="password" autocomplete="current-password" maxlength="72" required><button type="button" class="password-toggle" data-password-toggle="current-password" aria-label="Afficher le mot de passe" aria-pressed="false">${PASSWORD_EYE}</button></span></label>
+      <label for="new-password">Nouveau mot de passe<span class="password-field"><input id="new-password" name="newPassword" type="password" autocomplete="new-password" minlength="12" maxlength="72" required><button type="button" class="password-toggle" data-password-toggle="new-password" aria-label="Afficher le mot de passe" aria-pressed="false">${PASSWORD_EYE}</button></span></label>
+      <label for="confirm-new-password">Confirmer le nouveau mot de passe<span class="password-field"><input id="confirm-new-password" name="confirmation" type="password" autocomplete="new-password" minlength="12" maxlength="72" required><button type="button" class="password-toggle" data-password-toggle="confirm-new-password" aria-label="Afficher le mot de passe" aria-pressed="false">${PASSWORD_EYE}</button></span></label>
+      <p>Utilise un mot de passe d’au moins 12 caractères, avec au moins une majuscule et un symbole. Les autres sessions seront déconnectées.</p>
       <p id="account-error" role="alert"></p><div class="button-row"><button type="button" class="subtle" data-close>Annuler</button>
       <button class="primary" type="submit">Changer le mot de passe</button></div></form>`);
+
+    const dialog = document.querySelector("#dialog");
+    bindPasswordToggles(dialog);
 
     const form = document.querySelector("#password-form");
     form.onsubmit = async (event) => {
@@ -115,10 +138,13 @@ export function bindAccountControls({ toast, openDialog, importLocal }) {
     if (!mayLeave()) return;
     openDialog(`<h2>Supprimer mon compte</h2><p>Ton profil et ton carnet seront supprimés de la base active. Exporte d’abord les données que tu veux conserver.</p>
       <p>Les sauvegardes techniques expirent après ${esc(context.policy.backupDays)} jours. Cette suppression retire également ton consentement à la synchronisation.</p>
-      <form id="delete-account-form" class="account-form"><label>Mon mot de passe<input type="password" name="password" autocomplete="current-password" required></label>
+      <form id="delete-account-form" class="account-form"><label for="delete-password">Mon mot de passe<span class="password-field"><input id="delete-password" type="password" name="password" autocomplete="current-password" maxlength="72" required><button type="button" class="password-toggle" data-password-toggle="delete-password" aria-label="Afficher le mot de passe" aria-pressed="false">${PASSWORD_EYE}</button></span></label>
       <label class="check"><input type="checkbox" name="confirm" required> Je confirme la suppression de mon compte et de son carnet.</label>
       <p id="account-error" role="alert"></p><div class="button-row"><button type="button" class="subtle" data-close>Annuler</button>
       <button type="submit" class="primary danger">Supprimer définitivement</button></div></form>`);
+
+    const dialog = document.querySelector("#dialog");
+    bindPasswordToggles(dialog);
 
     const form = document.querySelector("#delete-account-form");
     form.onsubmit = async (event) => {

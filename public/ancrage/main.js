@@ -10,6 +10,26 @@ const AUTH_SCREEN_KEY = "ancrage-auth-screen";
 let serviceError = "";
 let authNotice = "";
 
+const PASSWORD_EYE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg>';
+const PASSWORD_EYE_OFF = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3l18 18"/><path d="M10.6 6.2A11 11 0 0 1 12 6c6.5 0 10 6 10 6a16 16 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.5 6 10 6a10.8 10.8 0 0 0 4.1-.8"/><path d="M9.9 9.9A3 3 0 0 0 14.1 14.1"/></svg>';
+
+function bindPasswordToggles(root = document) {
+  root.querySelectorAll("[data-password-toggle]").forEach((button) => {
+    button.onclick = () => {
+      const input = root.querySelector(`#${CSS.escape(button.dataset.passwordToggle)}`);
+      if (!input) return;
+      const visible = input.type === "text";
+      input.type = visible ? "password" : "text";
+      button.setAttribute("aria-pressed", String(!visible));
+      button.setAttribute(
+        "aria-label",
+        visible ? "Afficher le mot de passe" : "Masquer le mot de passe",
+      );
+      button.innerHTML = visible ? PASSWORD_EYE : PASSWORD_EYE_OFF;
+    };
+  });
+}
+
 async function start(mode, result = null) {
   let notebook = result?.notebook;
   let localError = false;
@@ -129,7 +149,7 @@ function authScreen(mode = "login", resetToken = "") {
   const intro = forgotten
     ? "Indique l’adresse e-mail de ton compte. Si elle correspond à un compte Ancrage, tu recevras un lien de réinitialisation."
     : resetting
-      ? "Choisis une nouvelle phrase de passe pour ton compte."
+      ? "Choisis un nouveau mot de passe pour ton compte."
       : "Un carnet personnel, à retrouver sur tes appareils.";
 
   let formHtml = "";
@@ -145,11 +165,11 @@ function authScreen(mode = "login", resetToken = "") {
   } else if (resetting) {
     formHtml = `<form id="auth-form" class="account-form">
       <label for="auth-password">Nouveau mot de passe
-        <input id="auth-password" name="password" type="password" autocomplete="new-password" minlength="15" maxlength="72" required>
+        <span class="password-field"><input id="auth-password" name="password" type="password" autocomplete="new-password" minlength="12" maxlength="72" required><button type="button" class="password-toggle" data-password-toggle="auth-password" aria-label="Afficher le mot de passe" aria-pressed="false">${PASSWORD_EYE}</button></span>
       </label>
-      <p class="muted">Utilise une phrase de passe d’au moins 15 caractères.</p>
+      <p class="muted">Utilise un mot de passe d’au moins 12 caractères, avec au moins une majuscule et un symbole.</p>
       <label for="auth-confirmation">Confirmer le mot de passe
-        <input id="auth-confirmation" type="password" name="confirmation" autocomplete="new-password" required>
+        <span class="password-field"><input id="auth-confirmation" type="password" name="confirmation" autocomplete="new-password" minlength="12" maxlength="72" required><button type="button" class="password-toggle" data-password-toggle="auth-confirmation" aria-label="Afficher le mot de passe" aria-pressed="false">${PASSWORD_EYE}</button></span>
       </label>
       <p id="auth-error" role="alert"></p>
       <button type="submit" class="primary" ${!ready ? "disabled" : ""}>Réinitialiser mon mot de passe</button>
@@ -160,9 +180,9 @@ function authScreen(mode = "login", resetToken = "") {
         <input id="auth-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" maxlength="254" required>
       </label>
       <label for="auth-password">Mot de passe
-        <input id="auth-password" name="password" type="password" autocomplete="${registration ? "new-password" : "current-password"}" ${registration ? 'minlength="15" maxlength="72"' : 'maxlength="72"'} required>
+        <span class="password-field"><input id="auth-password" name="password" type="password" autocomplete="${registration ? "new-password" : "current-password"}" ${registration ? 'minlength="12" maxlength="72"' : 'maxlength="72"'} required><button type="button" class="password-toggle" data-password-toggle="auth-password" aria-label="Afficher le mot de passe" aria-pressed="false">${PASSWORD_EYE}</button></span>
       </label>
-      ${registration ? '<p class="muted" id="password-help">Utilise une phrase de passe d’au moins 15 caractères.</p><label for="auth-confirmation">Confirmer le mot de passe<input id="auth-confirmation" type="password" name="confirmation" autocomplete="new-password" required></label>' : ""}
+      ${registration ? `<p class="muted" id="password-help">Utilise un mot de passe d’au moins 12 caractères, avec au moins une majuscule et un symbole.</p><label for="auth-confirmation">Confirmer le mot de passe<span class="password-field"><input id="auth-confirmation" type="password" name="confirmation" autocomplete="new-password" minlength="12" maxlength="72" required><button type="button" class="password-toggle" data-password-toggle="auth-confirmation" aria-label="Afficher le mot de passe" aria-pressed="false">${PASSWORD_EYE}</button></span></label>` : ""}
       ${
         registration
           ? `<details><summary>Lire les informations sur mes données</summary>${privacyNotice(context.policy)}</details>
@@ -194,6 +214,8 @@ function authScreen(mode = "login", resetToken = "") {
     ${formHtml}
     <div class="local-option"><h2>Continuer sans compte</h2><p>Ton suivi restera enregistré automatiquement dans ce navigateur. Crée un compte plus tard si tu veux le sauvegarder en ligne et le retrouver sur d’autres appareils.</p><button type="button" class="subtle" id="use-local">Continuer sans compte</button></div>
     <p class="muted">Ton adresse e-mail sert à identifier ton compte. Ton mot de passe n’est jamais enregistré en clair.</p></main>`;
+
+  bindPasswordToggles(app);
 
   document.querySelectorAll("[data-auth-mode]").forEach((button) => {
     button.onclick = () => {

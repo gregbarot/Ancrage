@@ -151,8 +151,18 @@ final class Security
 
     public static function newPassword(mixed $value): string
     {
-        if (!is_string($value) || mb_strlen($value) < 15 || strlen($value) > 72 || str_contains($value, "\0")) {
-            throw new HttpError(422, 'Choisis une phrase de passe d’au moins 15 caractères (72 octets maximum).');
+        $valid = is_string($value)
+            && mb_strlen($value) >= 12
+            && strlen($value) <= 72
+            && !str_contains($value, "\0")
+            && preg_match('/\p{Lu}/u', $value) === 1
+            && preg_match('/[^\p{L}\p{N}\s]/u', $value) === 1;
+
+        if (!$valid) {
+            throw new HttpError(
+                422,
+                'Choisis un mot de passe d’au moins 12 caractères avec au moins une majuscule et un symbole (72 octets maximum).'
+            );
         }
 
         return $value;
